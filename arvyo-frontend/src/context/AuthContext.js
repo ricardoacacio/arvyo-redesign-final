@@ -1,27 +1,24 @@
 // src/context/AuthContext.js
 
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { login, logout, fetchDashboardData } from '../services/api';
+// CRÍTICO: Adicione 'register' ao import abaixo!
+import { login, logout, fetchDashboardData, register } from '../services/api'; 
 
 // 1. Cria o Contexto
 export const AuthContext = createContext();
 
 // 2. Cria o Provedor do Contexto
 export const AuthProvider = ({ children }) => {
-  // Estado principal que diz se o usuário está autenticado
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Efeito para verificar o status de login ao carregar a aplicação
   useEffect(() => {
-    // Tentamos acessar um recurso protegido (Dashboard)
-    // Se funcionar, estamos logados. Se der 401/403, não estamos.
     const checkLoginStatus = async () => {
       try {
         await fetchDashboardData(); 
-        setIsLoggedIn(true); // Se conseguiu os dados, está logado
+        setIsLoggedIn(true);
       } catch (error) {
-        setIsLoggedIn(false); // Se deu erro de permissão (401/403), não está logado
+        setIsLoggedIn(false);
       } finally {
         setLoading(false);
       }
@@ -30,22 +27,33 @@ export const AuthProvider = ({ children }) => {
     checkLoginStatus();
   }, []);
 
-  // Função de Login
+  // --- FUNÇÃO DE LOGIN (OK) ---
   const loginUser = async (username, password) => {
     try {
-      // Chama a função login da API
       await login(username, password); 
       setIsLoggedIn(true);
-      // O retorno true/false é útil para redirecionar o usuário
       return true; 
     } catch (error) {
       console.error("Login falhou:", error);
-      // O erro pode ser de credenciais inválidas (400) ou outro problema.
       throw error; 
     }
   };
 
-  // Função de Logout
+  // --- FUNÇÃO DE CADASTRO (NOVA) ---
+  const registerUser = async (username, email, password) => {
+    try {
+      // Chama a função 'register' do api.js (agora que ela existe lá)
+      await register(username, email, password); 
+      // Não faz login, apenas retorna sucesso
+      return true; 
+    } catch (error) {
+      console.error("Cadastro falhou:", error.response?.data || error.message);
+      // Retorna o erro exato do backend (ex: "email já em uso")
+      throw error.response?.data || { detalhe: "Erro desconhecido ao cadastrar." };
+    }
+  };
+
+  // --- FUNÇÃO DE LOGOUT (OK) ---
   const logoutUser = async () => {
     try {
       await logout();
@@ -54,6 +62,7 @@ export const AuthProvider = ({ children }) => {
       console.error("Logout falhou:", error);
     }
   };
+
 
   if (loading) {
     return <div>Carregando estado inicial...</div>;
@@ -64,6 +73,7 @@ export const AuthProvider = ({ children }) => {
     isLoggedIn,
     loginUser,
     logoutUser,
+    registerUser, // CRÍTICO: Exportar a função de Cadastro
   };
 
   return (
