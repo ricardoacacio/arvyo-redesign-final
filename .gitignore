@@ -1,0 +1,15 @@
+# Arquivos de Sistema
+.DS_Store
+
+# Python/Django Files
+*.pyc
+__pycache__
+venv/
+*.sqlite3
+db.sqlite3
+/media/ # Se você tiver upload de arquivos
+
+# Node/React Files
+arvyo-frontend/node_modules/
+arvyo-frontend/build/
+arvyo-frontend/npm-debug.log
