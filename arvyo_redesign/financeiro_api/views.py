@@ -3,18 +3,24 @@ from django.http import JsonResponse
 from rest_framework import viewsets, permissions, status
 from .models import Conta, Cartao, Lancamento, Floresta, Hábito, CumprimentoHábito
 from .serializers import ContaSerializer, CartaoSerializer, LancamentoSerializer, FlorestaSerializer, HábitoSerializer, CumprimentoHábitoSerializer
-from .utils import atualizar_saldos_apos_lancamento
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny 
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied, NotAuthenticated
-from rest_framework.decorators import api_view, permission_classes # CRUCIAL para register_user
-from .utils import calcula_saldo_real, calcula_progresso_503020, calcula_voce_pode_gastar_hoje, plantar_arvore_e_consumir_recursos
-from django.contrib.auth import authenticate, login as django_login
-from django.contrib.auth.models import User # NOVO: Para o registro
+from rest_framework.decorators import api_view, permission_classes
 from django.contrib.auth import authenticate, login as django_login, logout as logout_django
-# Note: Removidas as imports: csrf_exempt e method_decorator
+from django.contrib.auth.models import User
+# Importa todas as funções de utilidade (incluindo a nova de cálculo)
+from .utils import (
+    atualizar_saldos_apos_lancamento,
+    calcula_saldo_real, 
+    calcula_progresso_503020, 
+    calcula_voce_pode_gastar_hoje, 
+    plantar_arvore_e_consumir_recursos,
+    calcula_saldo_real_consolidado # CRÍTICO: Importação da nova função
+)
+
 
 # --- ViewSets de Gestão (Contas, Cartões) ---
 
@@ -59,9 +65,7 @@ class LancamentoViewSet(viewsets.ModelViewSet):
             atualizar_saldos_apos_lancamento(instance)
         except ValueError as e:
             instance.delete()
-            # Certifique-se de importar serializers do rest_framework se usar esta linha:
-            # raise serializers.ValidationError({"detalhe": str(e)})
-            raise PermissionDenied({"detalhe": str(e)}) # Usamos PermissionDenied como fallback
+            raise PermissionDenied({"detalhe": str(e)})
 
 # --- ViewSet da Gamificação (Floresta) ---
 
@@ -83,19 +87,22 @@ class DashboardView(APIView):
         if not request.user.is_authenticated:
             raise NotAuthenticated("Usuário não autenticado.")
         
-        # O Django deve ser configurado para calcular esses dados
+        user = request.user
+        
+        # --- Lógica para buscar os dados reais ---
+        # 1. Busca o Saldo Consolidado Real
+        saldo_consolidado = calcula_saldo_real_consolidado(user)
+        
         data = {
-            "usuario_nome": request.user.username, # Adicione o nome do usuário aqui
-            "saldo_real_consolidado": "12.500,00",
-            "voce_pode_gastar_hoje": "2.100,00",
+            "usuario_nome": user.username,
+            "saldo_real_consolidado": saldo_consolidado, # AGORA É O VALOR REAL DO DB
+            "voce_pode_gastar_hoje": "2100.00", # Estático por enquanto
             "progresso_503020": {
-                "renda_mensal": "5.000,00",
-                "gastos_essencial": "2.500,00"
+                "renda_mensal": "5000.00",
+                "gastos_essencial": "2500.00"
             }
         }
         return JsonResponse(data)
-    
-# NOTE: LoginView removida para evitar conflito de CSRF
     
 class HábitoViewSet(viewsets.ModelViewSet):
     """API para CRUD de Hábitos."""
@@ -187,7 +194,7 @@ def register_user(request):
     
 # NOVO: Endpoint para Login (FINAL)
 @api_view(['POST'])
-@permission_classes([AllowAny]) # Permite acesso para realizar o login
+@permission_classes([AllowAny]) 
 def user_login(request):
     username = request.data.get('username')
     password = request.data.get('password')
@@ -195,17 +202,14 @@ def user_login(request):
     user = authenticate(request, username=username, password=password)
 
     if user is not None:
-        # A função django_login CRIA o cookie de sessão.
         django_login(request, user) 
         return Response({"message": "Login realizado com sucesso."}, status=status.HTTP_200_OK)
     else:
-        # Retorna 400 Bad Request para credenciais inválidas.
         return Response({"detalhe": "Credenciais inválidas."}, status=status.HTTP_400_BAD_REQUEST)
 
 # NOVO: Endpoint para Logout
 @api_view(['POST'])
-@permission_classes([IsAuthenticated]) # Só permite se o usuário estiver logado
+@permission_classes([IsAuthenticated]) 
 def user_logout(request):
-    # A função logout do Django remove o cookie de sessão.
     logout_django(request) 
     return Response({"message": "Logout realizado com sucesso."}, status=status.HTTP_200_OK)

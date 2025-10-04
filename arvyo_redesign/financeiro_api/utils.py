@@ -253,3 +253,17 @@ def plantar_arvore_e_consumir_recursos(user, tipo_conversao):
             return False, f"Economia insuficiente. Você precisa de R${VALOR_ECONOMIA_POR_ARVORE} de excedente e tem R${economia_disponivel}."
             
     return False, "Tipo de conversão inválido."
+
+def calcula_saldo_real_consolidado(user):
+    """
+    Calcula a soma dos saldos de todas as contas do usuário.
+    Retorna o valor total (float).
+    """
+    # Importa o modelo Conta aqui para evitar problemas de dependência circular
+    from .models import Conta 
+    
+    # Filtra as contas pelo usuário e soma o campo 'saldo_atual'
+    saldo_total = Conta.objects.filter(usuario=user).aggregate(Sum('saldo_atual'))['saldo_atual__sum']
+    
+    # Se o usuário não tiver contas, a soma será None. Retornamos 0.0 nesse caso.
+    return saldo_total if saldo_total is not None else 0.0
